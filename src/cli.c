@@ -180,6 +180,8 @@ static void start_dump(char *filename)
 
     printf("\nDump stopped\n");
 
+    printf("\nDump file: %s\n", filename);
+
     /* close dump file */
     fclose(fd);
     fd = NULL;
@@ -348,6 +350,7 @@ void cli_loop(void)
         {
             printf("Commands:\n");
             printf(" start\n");
+            printf(" dump <filename>\n");
             printf(" baudrate\n");
             printf(" set baudrate <value>\n");
             printf(" set mode\n");
