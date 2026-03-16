@@ -167,6 +167,11 @@ int serial_open(serial_port_t *sp)
         return -1;
     }
 
+    int flags = fcntl(sp->fd, F_GETFL, 0);
+    if (flags != -1) {
+        fcntl(sp->fd, F_SETFL, flags | O_NONBLOCK);
+    }
+
     struct termios tty;
 
     memset(&tty,0,sizeof(tty));
@@ -225,7 +230,7 @@ int serial_read(serial_port_t *sp, uint8_t *buf, int len)
 
     if(n < 0)
     {
-        if(errno == EAGAIN)
+        if(errno == EAGAIN || errno == EWOULDBLOCK)
             return 0;
         return -1;
     }
