@@ -15,14 +15,12 @@
 #include <sys/select.h>
 #endif
 
+extern FILE *fd;
 
 static serial_port_t *serial;
 static ring_buffer_t *ring;
 
 static volatile int running = 0;
-
-static uint64_t rx_bytes = 0;
-static uint64_t packets = 0;
 
 #ifdef _WIN32
 static HANDLE rx_thread_handle;
@@ -48,6 +46,8 @@ void* rx_thread(void *arg)
 {
     uint8_t buf[4096];
 
+    parser_stats_t *stats = parser_get_stats();
+
     while(running)
     {
         int n = serial_read(serial, buf, sizeof(buf));
@@ -55,7 +55,7 @@ void* rx_thread(void *arg)
         if(n > 0)
         {
             ring_write(ring, buf, n);
-            rx_bytes += n;
+            stats->bytes_rx_total += n;
         }
     }
 
@@ -102,11 +102,31 @@ static void wait_keypress()
 #endif
 }
 
+static void print_stats(void)
+{
+    parser_stats_t *stats = parser_get_stats();
+
+    printf("\nParser statistics\n");
+    printf("-----------------\n");
+    printf("Packets total   : %llu\n", (unsigned long long)stats->packets_total);
+    printf("Packets valid   : %llu\n", (unsigned long long)stats->packets_valid);
+    printf("Size errors     : %llu\n", (unsigned long long)stats->packets_size_error);
+    printf("Tail errors     : %llu\n", (unsigned long long)stats->packets_tail_error);
+    printf("CRC errors      : %llu\n", (unsigned long long)stats->packets_crc_error);
+    printf("Bytes processed : %llu\n", (unsigned long long)stats->bytes_discarded);
+    printf("Total bytes rx  : %llu\n", (unsigned long long)stats->bytes_rx_total);
+}
 
 static void start_capture()
 {
     printf("Starting capture...\n");
     printf("Press any key to stop\n");
+
+    /* reset stats */
+    reset_stats();
+
+    /* create dump file */
+    fd = fopen("lidar3d_hexdump.txt", "w");
 
     running = 1;
 
@@ -141,8 +161,15 @@ static void start_capture()
 #endif
 
     printf("\nCapture stopped\n");
-    printf("Bytes received : %llu\n",(unsigned long long)rx_bytes);
-    printf("Packets parsed : %llu\n",(unsigned long long)packets);
+
+    /* close dump file */
+    if (fd) {
+        fclose(fd);
+        fd = NULL;
+    }
+
+    /* print rx stats */
+    print_stats();
 }
 
 

@@ -1,5 +1,6 @@
 #include "parser.h"
 #include "unitree_lidar_protocol.h"
+// #include "unitree_lidar_utilities.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -28,6 +29,25 @@ static uint32_t expected_packet_size;
 
 static parser_stats_t stats;
 
+FILE* fd = NULL;
+
+static uint32_t crc32(const uint8_t *buf, uint32_t len)
+{
+    uint8_t i;
+    uint32_t crc = 0xFFFFFFFF;
+    while (len--)
+    {
+        crc ^= *buf++;
+        for (i = 0; i < 8; ++i)
+        {
+            if (crc & 1)
+                crc = (crc >> 1) ^ 0xEDB88320;
+            else
+                crc = (crc >> 1);
+        }
+    }
+    return ~crc;
+}
 
 static void dump_hex(uint8_t *data, int len)
 {
@@ -37,6 +57,17 @@ static void dump_hex(uint8_t *data, int len)
         if((i+1)%16==0) printf("\n");
     }
     printf("\n");
+
+    if (fd)
+    {
+        for(int i = 0; i < len; i++)
+        {
+            fprintf(fd, "%02X ", data[i]);
+            if ((i + 1) % 16 == 0)
+                fprintf(fd, "\n");
+        }
+        printf("\n");
+    }
 }
 
 
@@ -47,11 +78,15 @@ void parser_init(void)
 }
 
 
-const parser_stats_t* parser_get_stats(void)
+parser_stats_t* parser_get_stats(void)
 {
     return &stats;
 }
 
+void reset_stats(void)
+{
+    memset(&stats, 0, sizeof(stats));
+}
 
 static int header_match(uint8_t *p)
 {
@@ -84,7 +119,7 @@ void parser_process(ring_buffer_t *rb)
                 if(!header_match(ptr))
                 {
                     ring_consume(rb,1);
-                    stats.bytes_processed++;
+                    stats.bytes_discarded++;
                     break;
                 }
 
@@ -148,6 +183,11 @@ void parser_process(ring_buffer_t *rb)
                 }
 
                 stats.packets_valid++;
+
+                uint32_t crc = crc32(packet, expected_packet_size);
+                if (crc != *(uint32_t *)(tail - 10)) {
+                    stats.packets_crc_error++;
+                }
 
                 dump_hex(packet, expected_packet_size);
 

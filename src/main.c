@@ -76,17 +76,6 @@ int main(int argc, char *argv[])
     serial_close(&serial);
     ring_free(&ring);
 
-    const parser_stats_t *stats = parser_get_stats();
-
-    printf("\nParser statistics\n");
-    printf("------------------\n");
-    printf("Packets total   : %llu\n", (unsigned long long)stats->packets_total);
-    printf("Packets valid   : %llu\n", (unsigned long long)stats->packets_valid);
-    printf("Size errors     : %llu\n", (unsigned long long)stats->packets_size_error);
-    printf("Tail errors     : %llu\n", (unsigned long long)stats->packets_tail_error);
-    printf("CRC errors      : %llu\n", (unsigned long long)stats->packets_crc_error);
-    printf("Bytes processed : %llu\n", (unsigned long long)stats->bytes_processed);
-
     printf("\nProgram terminated\n");
 
     return 0;
