@@ -113,7 +113,7 @@ static void print_stats(void)
     printf("Size errors     : %llu\n", (unsigned long long)stats->packets_size_error);
     printf("Tail errors     : %llu\n", (unsigned long long)stats->packets_tail_error);
     printf("CRC errors      : %llu\n", (unsigned long long)stats->packets_crc_error);
-    printf("Bytes processed : %llu\n", (unsigned long long)stats->bytes_discarded);
+    printf("Bytes discarded : %llu\n", (unsigned long long)stats->bytes_discarded);
     printf("Total bytes rx  : %llu\n", (unsigned long long)stats->bytes_rx_total);
 }
 

@@ -184,7 +184,7 @@ void parser_process(ring_buffer_t *rb)
 
                 stats.packets_valid++;
 
-                uint32_t crc = crc32(packet, expected_packet_size);
+                uint32_t crc = crc32(packet + 12, expected_packet_size - 24);
                 if (crc != *(uint32_t *)(tail - 10)) {
                     stats.packets_crc_error++;
                 }
