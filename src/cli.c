@@ -17,7 +17,7 @@
 
 extern FILE *fd;
 
-static serial_port_t *serial;
+static serial_port_t serial;
 static ring_buffer_t *ring;
 
 static volatile int running = 0;
@@ -31,9 +31,11 @@ static pthread_t parser_thread_handle;
 #endif
 
 
-void cli_init(serial_port_t *sp, ring_buffer_t *rb)
+void cli_init(ring_buffer_t *rb, const char *dev, int baudrate)
 {
-    serial = sp;
+    serial.baudrate = baudrate;
+    serial.fd = 0;
+    strcpy(serial.dev, dev);
     ring = rb;
 }
 
@@ -50,7 +52,7 @@ void* rx_thread(void *arg)
 
     while(running)
     {
-        int n = serial_read(serial, buf, sizeof(buf));
+        int n = serial_read(&serial, buf, sizeof(buf));
 
         if(n > 0)
         {
@@ -117,6 +119,75 @@ static void print_stats(void)
     printf("Total bytes rx  : %llu\n", (unsigned long long)stats->bytes_rx_total);
 }
 
+static void start_dump(char *filename)
+{
+    printf("Starting dumping...\n");
+    printf("Press any key to stop\n");
+
+    /* reset stats */
+    reset_stats();
+
+    /* create dump file */
+    fd = fopen(filename, "w");
+    if (!fd)
+    {
+        printf("Failed to create dump file %s\n", filename);
+        return;
+    }
+
+    /* open serial port */
+    if(serial_open(&serial) != 0)
+    {
+        printf("Failed to open serial port %s @ %d baudrate\n", serial.dev, serial.baudrate);
+        fclose(fd);
+        fd = NULL;
+        return;
+    }
+
+    running = 1;
+
+#ifdef _WIN32
+
+    rx_thread_handle = CreateThread(NULL,0,rx_thread,NULL,0,NULL);
+    parser_thread_handle = CreateThread(NULL,0,parser_thread,NULL,0,NULL);
+
+#else
+
+    pthread_create(&rx_thread_handle,NULL,rx_thread,NULL);
+    pthread_create(&parser_thread_handle,NULL,parser_thread,NULL);
+
+#endif
+
+    wait_keypress();
+
+    printf("Dump Stoping...\n");
+
+    running = 0;
+
+    serial_close(&serial);
+
+#ifdef _WIN32
+
+    WaitForSingleObject(rx_thread_handle,INFINITE);
+    WaitForSingleObject(parser_thread_handle,INFINITE);
+
+#else
+
+    pthread_join(rx_thread_handle,NULL);
+    pthread_join(parser_thread_handle,NULL);
+
+#endif
+
+    printf("\nDump stopped\n");
+
+    /* close dump file */
+    fclose(fd);
+    fd = NULL;
+
+    /* print rx stats */
+    print_stats();
+}
+
 static void start_capture()
 {
     printf("Starting capture...\n");
@@ -125,8 +196,12 @@ static void start_capture()
     /* reset stats */
     reset_stats();
 
-    /* create dump file */
-    fd = fopen("lidar3d_hexdump.txt", "w");
+    /* open serial port */
+    if(serial_open(&serial) != 0)
+    {
+        printf("Failed to open serial port %s @ %d baudrate\n", serial.dev, serial.baudrate);
+        return;
+    }
 
     running = 1;
 
@@ -148,6 +223,8 @@ static void start_capture()
 
     running = 0;
 
+    serial_close(&serial);
+
 #ifdef _WIN32
 
     WaitForSingleObject(rx_thread_handle,INFINITE);
@@ -161,12 +238,6 @@ static void start_capture()
 #endif
 
     printf("\nCapture stopped\n");
-
-    /* close dump file */
-    if (fd) {
-        fclose(fd);
-        fd = NULL;
-    }
 
     /* print rx stats */
     print_stats();
@@ -193,7 +264,7 @@ static void send_mode_command()
     packet[packet_size-2] = 0x00;
     packet[packet_size-1] = 0xFF;
 
-    serial_write(serial,packet,packet_size);
+    serial_write(&serial,packet,packet_size);
 
     printf("Mode command sent\n");
 }
@@ -201,6 +272,7 @@ static void send_mode_command()
 void cli_loop(void)
 {
     char line[256];
+    int i = 0;
 
     while(1)
     {
@@ -213,30 +285,53 @@ void cli_loop(void)
         if (strlen(line) <= 1)
             continue;
 
+        i = 0;
+
+        while (1)
+        {
+            if (line[i] == 10 || line[i] == 13) {
+                line[i] = 0;
+                break;
+            }
+            i++;
+        }
+
         if(strncmp(line,"start",5) == 0)
         {
             start_capture();
         }
 
+        else if(strncmp(line,"dump", 4) == 0)
+        {
+            start_dump(line+5);
+        }
+
         else if(strncmp(line,"baudrate",8) == 0)
         {
-            printf("Current baudrate: %d\n", serial->baudrate);
+            printf("Current baudrate: %d\n", serial.baudrate);
         }
 
         else if(strncmp(line,"set baudrate",12) == 0)
         {
-            int baud = atoi(line+13);
+            int baudrate = atoi(line+13);
 
-            if(baud <= 0)
+            if(baudrate <= 0)
             {
                 printf("Invalid baudrate\n");
                 continue;
             }
 
-            if(serial_set_baud(serial,baud) == 0)
-                printf("Baudrate set to %d\n",baud);
+            if (serial_is_opened(&serial))
+            {
+                if(serial_set_baudrate(&serial, baudrate) == 0)
+                    printf("Baudrate set to %d\n", baudrate);
+                else
+                    printf("Failed setting baudrate\n");
+            }
             else
-                printf("Failed setting baudrate\n");
+            {
+                serial.baudrate = baudrate;
+            }
         }
 
         else if(strncmp(line,"set mode",8) == 0)

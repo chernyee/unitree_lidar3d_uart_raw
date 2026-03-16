@@ -151,13 +151,19 @@ static int set_baudrate(struct termios *tty, int baud)
     return 0;
 }
 
-int serial_open(serial_port_t *sp, const char *dev, int baud)
+int serial_is_opened(serial_port_t *sp)
 {
-    sp->fd = open(dev, O_RDWR | O_NOCTTY);
+    return sp->fd ? 1 : 0;
+}
+
+int serial_open(serial_port_t *sp)
+{
+    sp->fd = open(sp->dev, O_RDWR | O_NOCTTY);
 
     if(sp->fd < 0)
     {
         perror("open serial");
+        sp->fd = 0;
         return -1;
     }
 
@@ -168,10 +174,12 @@ int serial_open(serial_port_t *sp, const char *dev, int baud)
     if(tcgetattr(sp->fd, &tty) != 0)
     {
         perror("tcgetattr");
+        close(sp->fd);
+        sp->fd = 0;
         return -1;
     }
 
-    set_baudrate(&tty, baud);
+    set_baudrate(&tty, sp->baudrate);
 
     tty.c_cflag |= (CLOCAL | CREAD);
 
@@ -191,24 +199,22 @@ int serial_open(serial_port_t *sp, const char *dev, int baud)
 
     tcsetattr(sp->fd, TCSANOW, &tty);
 
-    sp->baudrate = baud;
-
     return 0;
 }
 
-int serial_set_baud(serial_port_t *sp, int baud)
+int serial_set_baudrate(serial_port_t *sp, int baudrate)
 {
     struct termios tty;
 
     if(tcgetattr(sp->fd,&tty) != 0)
         return -1;
 
-    if(set_baudrate(&tty,baud) != 0)
+    if(set_baudrate(&tty,baudrate) != 0)
         return -1;
 
     tcsetattr(sp->fd,TCSANOW,&tty);
 
-    sp->baudrate = baud;
+    sp->baudrate = baudrate;
 
     return 0;
 }
@@ -236,6 +242,7 @@ void serial_close(serial_port_t *sp)
 {
     if(sp->fd > 0)
         close(sp->fd);
+    sp->fd = 0;
 }
 
 #endif

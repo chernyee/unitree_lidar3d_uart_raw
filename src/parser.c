@@ -57,19 +57,18 @@ static void dump_hex(uint8_t *data, int len)
         if((i+1)%16==0) printf("\n");
     }
     printf("\n");
-
-    if (fd)
-    {
-        for(int i = 0; i < len; i++)
-        {
-            fprintf(fd, "%02X ", data[i]);
-            if ((i + 1) % 16 == 0)
-                fprintf(fd, "\n");
-        }
-        printf("\n");
-    }
 }
 
+static void dump_hex_to_file(uint8_t *data, int len)
+{
+    for(int i = 0; i < len; i++)
+    {
+        fprintf(fd, "%02X ", data[i]);
+        if ((i + 1) % 16 == 0)
+            fprintf(fd, "\n");
+    }
+    fprintf(fd, "\n");
+}
 
 void parser_init(void)
 {
@@ -189,7 +188,14 @@ void parser_process(ring_buffer_t *rb)
                     stats.packets_crc_error++;
                 }
 
-                dump_hex(packet, expected_packet_size);
+                if (fd)
+                {
+                    dump_hex_to_file(packet, expected_packet_size);
+                }
+                else
+                {
+                    dump_hex(packet, expected_packet_size);
+                }
 
                 ring_consume(rb, expected_packet_size);
 
