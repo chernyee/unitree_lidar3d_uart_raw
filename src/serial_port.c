@@ -40,11 +40,11 @@ static int configure_port(serial_port_t *sp, int baud)
     return 0;
 }
 
-int serial_open(serial_port_t *sp, const char *dev, int baud)
+int serial_open(serial_port_t *sp)
 {
     char path[64];
 
-    snprintf(path,sizeof(path),"\\\\.\\%s",dev);
+    snprintf(path,sizeof(path),"\\\\.\\%s",sp->dev);
 
     sp->handle = CreateFileA(
         path,
@@ -59,25 +59,32 @@ int serial_open(serial_port_t *sp, const char *dev, int baud)
     if(sp->handle == INVALID_HANDLE_VALUE)
     {
         printf("Failed opening serial port\n");
+        sp->handle = NULL;
         return -1;
     }
 
     SetupComm(sp->handle, 1<<20, 1<<20);
 
-    if(configure_port(sp, baud) != 0)
+    if(configure_port(sp, sp->baudrate) != 0) {
+        CloseHandle(sp->handle);
+        sp->handle = NULL;
         return -1;
-
-    sp->baudrate = baud;
+    }
 
     return 0;
 }
 
-int serial_set_baud(serial_port_t *sp, int baud)
+int serial_is_opened(serial_port_t *sp)
 {
-    if(configure_port(sp, baud) != 0)
+    return sp->handle ? 1 : 0;
+}
+
+int serial_set_baudrate(serial_port_t *sp, int baudrate)
+{
+    if(configure_port(sp, baudrate) != 0)
         return -1;
 
-    sp->baudrate = baud;
+    sp->baudrate = baudrate;
 
     return 0;
 }
@@ -106,6 +113,7 @@ void serial_close(serial_port_t *sp)
 {
     if(sp->handle)
         CloseHandle(sp->handle);
+    sp->handle = NULL;
 }
 
 #else

@@ -34,7 +34,11 @@ static pthread_t parser_thread_handle;
 void cli_init(ring_buffer_t *rb, const char *dev, int baudrate)
 {
     serial.baudrate = baudrate;
+#ifdef _WIN32
+    serial.handle = NULL;
+#else
     serial.fd = 0;
+#endif
     strcpy(serial.dev, dev);
     ring = rb;
 }
