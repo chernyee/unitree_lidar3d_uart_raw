@@ -22,7 +22,6 @@ static void print_usage(const char *prog)
 
 int main(int argc, char *argv[])
 {
-    serial_port_t serial;
     ring_buffer_t ring;
 
     const char *port;
@@ -52,19 +51,10 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    /* open serial port */
-    if(serial_open(&serial, port, baud) != 0)
-    {
-        printf("Failed to open serial port %s\n", port);
-        ring_free(&ring);
-        return -1;
-    }
-
-    printf("Serial opened: %s @ %d baud\n", port, baud);
     printf("Ring buffer size: %d MB\n", RING_BUFFER_SIZE / (1024*1024));
 
     /* initialize CLI */
-    cli_init(&serial, &ring);
+    cli_init(&ring, port, baud);
 
     /* initialize parser FSM */
     parser_init();
@@ -73,7 +63,6 @@ int main(int argc, char *argv[])
     cli_loop();
 
     /* cleanup */
-    serial_close(&serial);
     ring_free(&ring);
 
     printf("\nProgram terminated\n");
